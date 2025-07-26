@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core Colors */
+    --color-background: #FEFEFE; /* warm off-white */
+    --color-foreground: #1E293B; /* rich charcoal */
+    --color-border: #E2E8F0; /* neutral gray */
+    --color-input: #FFFFFF; /* white */
+    --color-ring: #2563EB; /* professional blue */
+    
+    /* Card Colors */
+    --color-card: #FFFFFF; /* white */
+    --color-card-foreground: #1E293B; /* rich charcoal */
+    
+    /* Popover Colors */
+    --color-popover: #FFFFFF; /* white */
+    --color-popover-foreground: #1E293B; /* rich charcoal */
+    
+    /* Muted Colors */
+    --color-muted: #F8FAFC; /* subtle gray */
+    --color-muted-foreground: #475569; /* balanced gray */
+    
+    /* Primary Colors */
+    --color-primary: #2563EB; /* professional blue */
+    --color-primary-foreground: #FFFFFF; /* white */
+    
+    /* Secondary Colors */
+    --color-secondary: #64748B; /* sophisticated slate */
+    --color-secondary-foreground: #FFFFFF; /* white */
+    
+    /* Destructive Colors */
+    --color-destructive: #EF4444; /* clear red */
+    --color-destructive-foreground: #FFFFFF; /* white */
+    
+    /* Accent Colors */
+    --color-accent: #059669; /* confident emerald */
+    --color-accent-foreground: #FFFFFF; /* white */
+    
+    /* Success Colors */
+    --color-success: #10B981; /* clear emerald */
+    --color-success-foreground: #FFFFFF; /* white */
+    
+    /* Warning Colors */
+    --color-warning: #F59E0B; /* warm amber */
+    --color-warning-foreground: #FFFFFF; /* white */
+    
+    /* Error Colors */
+    --color-error: #EF4444; /* clear red */
+    --color-error-foreground: #FFFFFF; /* white */
+  }
+
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  
+  .shadow-soft {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .shadow-elevated {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  }
+  
+  .transition-smooth {
+    transition: all 200ms ease-out;
+  }
+  
+  .transition-hover {
+    transition: all 150ms ease-in-out;
+  }
+  
+  .transition-spring {
+    transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  
+  /* Industry Standard Screenplay Formatting */
+  .screenplay-font {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+  
+  .screenplay-scene-heading {
+    margin-left: 0;
+    text-transform: uppercase;
+    font-weight: bold;
+  }
+  
+  .screenplay-action {
+    margin-left: 0;
+  }
+  
+  .screenplay-character {
+    margin-left: 3.7in;
+    text-transform: uppercase;
+    font-weight: bold;
+  }
+  
+  .screenplay-dialogue {
+    margin-left: 2.5in;
+    margin-right: 2.5in;
+  }
+  
+  .screenplay-parenthetical {
+    margin-left: 3.0in;
+    font-style: italic;
+  }
+  
+  .screenplay-transition {
+    margin-left: 4.0in;
+    text-transform: uppercase;
+    font-weight: bold;
+    text-align: right;
+  }
+}
