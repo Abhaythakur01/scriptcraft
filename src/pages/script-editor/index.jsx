@@ -1,135 +1,163 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
+import { createEditor, Transforms } from 'slate';
+import { Slate, withReact } from 'slate-react';
+import { withHistory } from 'slate-history';
 import Header from '../../components/ui/Header';
 import ScriptContextToolbar from '../../components/ui/ScriptContextToolbar';
 import FormattingPalette from './components/FormattingPalette';
 import ScriptEditor from './components/ScriptEditor';
 import ScriptNavigator from './components/ScriptNavigator';
-import FindReplacePanel from './components/FindReplacePanel';
-import DistractionFreeMode from './components/DistractionFreeMode';
+import { useScriptsStorage } from '../../hooks/useLocalStorage';
+import Icon from '../../components/AppIcon';
 
+// Constants
+const DEFAULT_INITIAL_VALUE = [
+  {
+    type: 'action',
+    children: [{ text: 'FADE IN:' }],
+  },
+];
+
+const AUTOSAVE_DELAY = 1500;
+
+// Helper functions
+const validateSlateContent = (content) => {
+  return Array.isArray(content) && content.length > 0;
+};
+
+const normalizeContentToSlate = (content) => {
+  if (validateSlateContent(content)) {
+    return content;
+  }
+  
+  if (typeof content === 'string' && content.trim()) {
+    return [{ type: 'action', children: [{ text: content }] }];
+  }
+  
+  return DEFAULT_INITIAL_VALUE;
+};
+
+// Loading component
+const EditorLoader = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="text-center">
+      <Icon 
+        name="Loader2" 
+        size={32} 
+        className="animate-spin text-primary mx-auto mb-4" 
+      />
+      <p className="text-muted-foreground">Loading Editor...</p>
+    </div>
+  </div>
+);
+
+// Main component
 const ScriptEditorPage = () => {
+  // Editor instance (stable reference)
+  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  
+  // State management
+  const [slateValue, setSlateValue] = useState(DEFAULT_INITIAL_VALUE);
+  const [scriptId, setScriptId] = useState(null);
   const [activeFormat, setActiveFormat] = useState('action');
-  const [content, setContent] = useState('');
-  const [showFindReplace, setShowFindReplace] = useState(false);
-  const [isDistractionFree, setIsDistractionFree] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  // Handle keyboard shortcuts
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Hooks
+  const location = useLocation();
+  const { scripts, updateScript } = useScriptsStorage();
+  
+  // Initialize editor content
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case 'f':
-            e.preventDefault();
-            setShowFindReplace(true);
-            break;
-          case 'h':
-            e.preventDefault();
-            setShowFindReplace(true);
-            break;
-          case 'Escape':
-            setShowFindReplace(false);
-            setIsDistractionFree(false);
-            break;
-          default:
-            break;
+    const scriptToEdit = location.state?.script;
+    let initialValue = DEFAULT_INITIAL_VALUE;
+    let currentScriptId = null;
+    
+    if (scriptToEdit) {
+      const foundScript = scripts.find(s => s.id === scriptToEdit.id);
+      if (foundScript) {
+        initialValue = normalizeContentToSlate(foundScript.content);
+        currentScriptId = foundScript.id;
+      }
+    }
+    
+    setSlateValue(initialValue);
+    setScriptId(currentScriptId);
+    setIsInitialized(true);
+  }, [location.state, scripts]);
+  
+  // Auto-save functionality
+  useEffect(() => {
+    if (!scriptId || !isInitialized) {
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      updateScript(scriptId, { content: slateValue });
+    }, AUTOSAVE_DELAY);
+    
+    return () => clearTimeout(timeoutId);
+  }, [slateValue, scriptId, isInitialized, updateScript]);
+  
+  // Event handlers
+  const handleFormatChange = useCallback((newFormat) => {
+    setActiveFormat(newFormat);
+    
+    // Apply format to current selection/block
+    try {
+      Transforms.setNodes(
+        editor,
+        { type: newFormat },
+        { 
+          match: n => editor.isBlock(n)
         }
-      }
+      );
       
-      if (e.key === 'F11') {
-        e.preventDefault();
-        setIsDistractionFree(!isDistractionFree);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isDistractionFree]);
-
-  const handleFormatChange = (format) => {
-    setActiveFormat(format);
-  };
-
-  const handleContentChange = (newContent) => {
-    setContent(newContent);
-  };
-
-  const toggleDistractionFree = () => {
-    setIsDistractionFree(!isDistractionFree);
-  };
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
-
+      // Focus editor after format change
+      setTimeout(() => {
+        editor.focus();
+      }, 0);
+    } catch (error) {
+      console.warn('Error applying format:', error);
+    }
+  }, [editor]);
+  
+  const handleValueChange = useCallback((newValue) => {
+    setSlateValue(newValue);
+  }, []);
+  
+  if (!isInitialized) {
+    return <EditorLoader />;
+  }
+  
   return (
     <>
       <Helmet>
         <title>Script Editor - ScriptCraft</title>
-        <meta name="description" content="Professional screenplay editor with industry-standard formatting, auto-complete, and real-time collaboration features." />
       </Helmet>
-
-      <div className="min-h-screen bg-background">
-        {/* Distraction-Free Mode */}
-        <DistractionFreeMode
-          isActive={isDistractionFree}
-          onToggle={toggleDistractionFree}
-          activeFormat={activeFormat}
-          onFormatChange={handleFormatChange}
-          content={content}
-          onContentChange={handleContentChange}
-        />
-
-        {/* Normal Mode */}
-        {!isDistractionFree && (
-          <>
-            <Header />
-            <ScriptContextToolbar />
-            
-            <div className="flex pt-32">
-              {/* Left Sidebar - Formatting Palette */}
-              <div className={`transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-64'}`}>
-                <FormattingPalette
-                  onFormatChange={handleFormatChange}
-                  activeFormat={activeFormat}
-                />
-              </div>
-
-              {/* Sidebar Toggle */}
-              <button
-                onClick={toggleSidebar}
-                className="fixed left-2 top-1/2 transform -translate-y-1/2 z-40 p-2 bg-muted border border-border rounded-lg hover:bg-card transition-hover"
-              >
-                <svg
-                  className={`w-4 h-4 text-muted-foreground transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-
-              {/* Main Editor */}
-              <ScriptEditor
-                activeFormat={activeFormat}
-                onFormatChange={handleFormatChange}
-                content={content}
-                onContentChange={handleContentChange}
-              />
-
-              {/* Right Sidebar - Navigator */}
-              <ScriptNavigator />
-            </div>
-
-            {/* Find & Replace Panel */}
-            <FindReplacePanel
-              isOpen={showFindReplace}
-              onClose={() => setShowFindReplace(false)}
+      
+      <div className="min-h-screen bg-background flex flex-col">
+        <Slate 
+          editor={editor} 
+          initialValue={slateValue}
+          onChange={handleValueChange}
+        >
+          <Header />
+          
+          <ScriptContextToolbar content={slateValue} />
+          
+          <div className="flex flex-1 pt-32">
+            <FormattingPalette
+              onFormatChange={handleFormatChange}
+              activeFormat={activeFormat}
             />
-          </>
-        )}
+            
+            <ScriptEditor />
+            
+            <ScriptNavigator content={slateValue} />
+          </div>
+        </Slate>
       </div>
     </>
   );

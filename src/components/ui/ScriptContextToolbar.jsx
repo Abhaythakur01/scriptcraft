@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Icon from '../AppIcon';
 import Button from './Button';
 
-const ScriptContextToolbar = () => {
+const ScriptContextToolbar = ({ content = '' }) => {
   const [saveStatus, setSaveStatus] = useState('saved'); // saved, saving, error
   const [viewMode, setViewMode] = useState('edit'); // edit, preview, split
   const location = useLocation();
 
   // Show toolbar only on script editor and script management pages
   const showToolbar = ['/script-editor', '/script-management'].includes(location.pathname);
+
+  const wordCount = useMemo(() => {
+    if (!content) return 0;
+
+    // Create a temporary element to strip HTML tags for accurate counting
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const text = tempDiv.textContent || tempDiv.innerText || '';
+
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    
+    // Handle the case where the editor is empty
+    if (words.length === 1 && words[0] === '') {
+      return 0;
+    }
+    
+    return words.length;
+  }, [content]);
+
 
   if (!showToolbar) return null;
 
@@ -71,7 +90,7 @@ const ScriptContextToolbar = () => {
           {location.pathname === '/script-editor' && (
             <div className="flex items-center space-x-1 border-l border-border pl-4">
               <span className="font-body text-sm text-muted-foreground">Word count:</span>
-              <span className="font-mono text-sm font-medium text-foreground">1,247</span>
+              <span className="font-mono text-sm font-medium text-foreground">{wordCount.toLocaleString()}</span>
             </div>
           )}
         </div>

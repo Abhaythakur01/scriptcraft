@@ -1,15 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const ScriptNavigator = () => {
-  const [activeTab, setActiveTab] = useState('scenes');
+const ScriptNavigator = ({ content = '' }) => {
+  const [activeTab, setActiveTab] = useState('stats');
+
+  // Memoized calculation for all statistics
+  const { 
+    wordCount, 
+    characterCount, 
+    pageCount, 
+    sceneCount, 
+    estimatedRuntime 
+  } = useMemo(() => {
+    // Create a temporary element to strip HTML tags for accurate counting
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const text = tempDiv.textContent || tempDiv.innerText || '';
+
+    // Word and Character Count
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length === 1 && words[0] === '' ? 0 : words.length;
+    const characterCount = text.length;
+
+    // Scene Count (counts lines starting with INT. or EXT.)
+    const sceneMatches = text.match(/^(INT\.|EXT\.)/gm) || [];
+    const sceneCount = sceneMatches.length;
+
+    // Page Count & Estimated Runtime (based on standard screenplay line counts)
+    const lines = text.split('\n').length;
+    const calculatedPageCount = Math.max(1, Math.ceil(lines / 55)); // Approx. 55 lines per page
+    const runtime = `${calculatedPageCount} min`;
+
+    return {
+      wordCount,
+      characterCount,
+      pageCount: calculatedPageCount,
+      sceneCount,
+      estimatedRuntime: runtime,
+    };
+  }, [content]);
 
   const scenes = [
     { id: 1, title: "INT. COFFEE SHOP - DAY", page: 1, duration: "2 min" },
     { id: 2, title: "EXT. CITY STREET - DAY", page: 3, duration: "1 min" },
     { id: 3, title: "INT. POLICE STATION - DAY", page: 4, duration: "3 min" },
-    { id: 4, title: "INT. SARAH\'S APARTMENT - NIGHT", page: 7, duration: "2 min" },
+    { id: 4, title: "INT. SARAH'S APARTMENT - NIGHT", page: 7, duration: "2 min" },
     { id: 5, title: "EXT. PARK - SUNSET", page: 9, duration: "1 min" }
   ];
 
@@ -22,12 +58,12 @@ const ScriptNavigator = () => {
   ];
 
   const statistics = [
-    { label: "Total Pages", value: "12", icon: "FileText" },
-    { label: "Scene Count", value: "5", icon: "MapPin" },
-    { label: "Character Count", value: "5", icon: "Users" },
-    { label: "Dialogue Lines", value: "67", icon: "MessageSquare" },
-    { label: "Estimated Runtime", value: "9 min", icon: "Clock" },
-    { label: "Word Count", value: "1,247", icon: "Type" }
+    { label: "Total Pages", value: pageCount, icon: "FileText" },
+    { label: "Scene Count", value: sceneCount, icon: "Camera" },
+    { label: "Dialogue Lines", value: "67", icon: "MessageSquare" }, // Placeholder
+    { label: "Estimated Runtime", value: estimatedRuntime, icon: "Clock" },
+    { label: "Word Count", value: wordCount.toLocaleString(), icon: "Type" },
+    { label: "Character Count", value: characterCount.toLocaleString(), icon: "Users" },
   ];
 
   const tabs = [
@@ -46,8 +82,8 @@ const ScriptNavigator = () => {
             onClick={() => setActiveTab(tab.id)}
             className={`
               flex-1 flex items-center justify-center space-x-2 py-3 px-4 text-sm font-body font-medium transition-hover
-              ${activeTab === tab.id 
-                ? 'bg-primary text-primary-foreground border-b-2 border-primary' 
+              ${activeTab === tab.id
+                ? 'bg-primary text-primary-foreground border-b-2 border-primary'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }
             `}

@@ -8,114 +8,50 @@ import QuickStartTemplates from './components/QuickStartTemplates';
 import SearchAndFilters from './components/SearchAndFilters';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
-
+import { useScriptsStorage, useFoldersStorage, useLocalStorage } from '../../hooks/useLocalStorage';
 
 
 const Dashboard = () => {
-  const [scripts, setScripts] = useState([]);
+  const { scripts, loading, addScript, updateScript, deleteScript, searchScripts } = useScriptsStorage();
+  const { folders } = useFoldersStorage();
+  const [userPreferences, setUserPreferences] = useLocalStorage('scriptcraft_user_preferences', {
+    viewMode: 'grid',
+    sortBy: 'recent',
+    filterType: 'all'
+  });
+
   const [filteredScripts, setFilteredScripts] = useState([]);
-  const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('recent');
-  const [filterType, setFilterType] = useState('all');
 
-  // Mock scripts data
-  const mockScripts = [
-    {
-      id: 1,
-      title: "The Last Stand",
-      description: "A gripping action thriller about a small town sheriff's final confrontation with a dangerous cartel.",
-      type: "feature",
-      pageCount: 108,
-      wordCount: 24567,
-      lastModified: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      thumbnail: "https://images.unsplash.com/photo-1489599162163-3f2f0c7c8e7e?w=300&h=400&fit=crop"
-    },
-    {
-      id: 2,
-      title: "Midnight Café",
-      description: "A romantic drama set in a 24-hour diner where strangers\' lives intersect over coffee and conversation.",
-      type: "feature",
-      pageCount: 95,
-      wordCount: 21890,
-      lastModified: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      thumbnail: "https://images.pexels.com/photos/1002703/pexels-photo-1002703.jpeg?w=300&h=400&fit=crop"
-    },
-    {
-      id: 3,
-      title: "Urban Dreams",
-      description: "A coming-of-age story following a young artist navigating the challenges of city life.",
-      type: "short",
-      pageCount: 18,
-      wordCount: 4250,
-      lastModified: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      thumbnail: "https://images.pixabay.com/photo/2016/11/29/13/14/attractive-1869761_1280.jpg?w=300&h=400&fit=crop"
-    },
-    {
-      id: 4,
-      title: "Silicon Valley Secrets",
-      description: "A tech thriller pilot exploring corporate espionage in the heart of innovation.",
-      type: "tv-pilot",
-      pageCount: 52,
-      wordCount: 12340,
-      lastModified: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      thumbnail: "https://images.unsplash.com/photo-1551434678-e076c223a692?w=300&h=400&fit=crop"
-    },
-    {
-      id: 5,
-      title: "The Journey",
-      description: "An epic adventure following a group of travelers across mystical lands.",
-      type: "feature",
-      pageCount: 124,
-      wordCount: 28750,
-      lastModified: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      thumbnail: "https://images.pexels.com/photos/346529/pexels-photo-346529.jpeg?w=300&h=400&fit=crop"
-    },
-    {
-      id: 6,
-      title: "Coffee Shop Chronicles",
-      description: "A short film about the daily interactions in a neighborhood coffee shop.",
-      type: "short",
-      pageCount: 12,
-      wordCount: 2890,
-      lastModified: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-      thumbnail: "https://images.pixabay.com/photo/2017/07/31/11/21/people-2557396_1280.jpg?w=300&h=400&fit=crop"
-    }
-  ];
-
-  useEffect(() => {
-    setScripts(mockScripts);
-    setFilteredScripts(mockScripts);
-  }, []);
-
-  // Filter and search functionality
+  // Apply filters and search
   useEffect(() => {
     let filtered = scripts;
 
-    // Apply search filter
+    // Apply search
     if (searchQuery) {
-      filtered = filtered.filter(script =>
-        script.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        script.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = searchScripts(searchQuery, {
+        searchInContent: true,
+        searchInTags: true,
+        caseSensitive: false
+      });
     }
 
     // Apply type filter
-    if (filterType !== 'all') {
-      filtered = filtered.filter(script => script.type === filterType);
+    if (userPreferences.filterType !== 'all') {
+      filtered = filtered.filter(script => script.type === userPreferences.filterType);
     }
 
     // Apply sorting
     filtered = [...filtered].sort((a, b) => {
-      switch (sortBy) {
+      switch (userPreferences.sortBy) {
         case 'alphabetical':
           return a.title.localeCompare(b.title);
         case 'created':
-          return new Date(b.lastModified) - new Date(a.lastModified);
+          return new Date(b.createdAt || b.lastModified) - new Date(a.createdAt || a.lastModified);
         case 'pages':
-          return b.pageCount - a.pageCount;
+          return (b.pageCount || 0) - (a.pageCount || 0);
         case 'type':
-          return a.type.localeCompare(b.type);
+          return a.type?.localeCompare(b.type || '');
         case 'recent':
         default:
           return new Date(b.lastModified) - new Date(a.lastModified);
@@ -123,26 +59,62 @@ const Dashboard = () => {
     });
 
     setFilteredScripts(filtered);
-  }, [scripts, searchQuery, filterType, sortBy]);
+  }, [scripts, searchQuery, userPreferences.filterType, userPreferences.sortBy, searchScripts]);
 
   const handleDuplicateScript = (scriptId) => {
     const scriptToDuplicate = scripts.find(s => s.id === scriptId);
     if (scriptToDuplicate) {
       const newScript = {
         ...scriptToDuplicate,
-        id: Date.now(),
+        id: Date.now() + Math.random(),
         title: `${scriptToDuplicate.title} (Copy)`,
-        lastModified: new Date()
+        lastModified: new Date().toISOString(),
+        createdAt: new Date().toISOString()
       };
-      setScripts(prev => [newScript, ...prev]);
+      addScript(newScript);
     }
   };
 
   const handleDeleteScript = (scriptId) => {
     if (window.confirm('Are you sure you want to delete this script?')) {
-      setScripts(prev => prev.filter(s => s.id !== scriptId));
+      deleteScript(scriptId);
     }
   };
+
+  const handlePreferenceChange = (key, value) => {
+    setUserPreferences(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleCreateNewScript = () => {
+    const newScript = {
+      title: "Untitled Script",
+      description: "A new screenplay ready for your creative vision.",
+      type: "feature",
+      pageCount: 0,
+      wordCount: 0,
+      content: "",
+      tags: [],
+      status: "draft"
+    };
+    
+    const createdScript = addScript(newScript);
+    // Navigate to editor with the new script
+    window.location.href = `/script-editor?id=${createdScript.id}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="Loader2" size={32} className="animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your scripts...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -164,10 +136,10 @@ const Dashboard = () => {
           {/* Search and Filters */}
           <SearchAndFilters
             onSearch={setSearchQuery}
-            onSort={setSortBy}
-            onViewChange={setViewMode}
-            viewMode={viewMode}
-            onFilterChange={setFilterType}
+            onSort={(value) => handlePreferenceChange('sortBy', value)}
+            onViewChange={(value) => handlePreferenceChange('viewMode', value)}
+            viewMode={userPreferences.viewMode}
+            onFilterChange={(value) => handlePreferenceChange('filterType', value)}
           />
 
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -192,15 +164,15 @@ const Dashboard = () => {
                       <Icon name="FileText" size={32} className="text-muted-foreground" />
                     </div>
                     <h3 className="font-heading text-lg font-semibold text-foreground mb-2">
-                      {searchQuery || filterType !== 'all' ? 'No scripts found' : 'No scripts yet'}
+                      {searchQuery || userPreferences.filterType !== 'all' ? 'No scripts found' : 'No scripts yet'}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      {searchQuery || filterType !== 'all' ?'Try adjusting your search or filters' :'Start your screenwriting journey by creating your first script'
+                      {searchQuery || userPreferences.filterType !== 'all' ? 'Try adjusting your search or filters': 'Start your screenwriting journey by creating your first script'
                       }
                     </p>
                     <Button 
                       variant="default"
-                      onClick={() => window.location.href = '/script-editor'}
+                      onClick={handleCreateNewScript}
                       iconName="Plus"
                       iconPosition="left"
                     >
@@ -209,13 +181,13 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className={
-                    viewMode === 'grid' ?'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' :'space-y-4'
+                    userPreferences.viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6': 'space-y-4'
                   }>
                     {filteredScripts.map((script) => (
                       <ScriptCard
                         key={script.id}
                         script={script}
-                        viewMode={viewMode}
+                        viewMode={userPreferences.viewMode}
                         onDuplicate={handleDuplicateScript}
                         onDelete={handleDeleteScript}
                       />
@@ -227,8 +199,8 @@ const Dashboard = () => {
 
             {/* Sidebar */}
             <div className="xl:col-span-1 space-y-6">
-              <WritingStats />
-              <QuickStartTemplates />
+              <WritingStats scripts={scripts} />
+              <QuickStartTemplates onCreateScript={handleCreateNewScript} />
               <RecentActivity />
             </div>
           </div>

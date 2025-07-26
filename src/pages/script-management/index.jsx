@@ -10,15 +10,24 @@ import BulkActionsBar from './components/BulkActionsBar';
 import VersionHistoryModal from './components/VersionHistoryModal';
 import ExportWizard from './components/ExportWizard';
 import SearchBar from './components/SearchBar';
+import FolderManager from '../../components/ui/FolderManager';
+import ImportExportModal from '../../components/ui/ImportExportModal';
+import { useScriptsStorage, useFoldersStorage } from '../../hooks/useLocalStorage';
+import storageService from '../../utils/storage';
 
 const ScriptManagement = () => {
   const navigate = useNavigate();
-  const [scripts, setScripts] = useState([]);
+  const { scripts, loading, addScript, updateScript, deleteScript, searchScripts } = useScriptsStorage();
+  const { folders, addFolder, addScriptToFolder } = useFoldersStorage();
+  
   const [filteredScripts, setFilteredScripts] = useState([]);
   const [selectedScripts, setSelectedScripts] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showExportWizard, setShowExportWizard] = useState(false);
+  const [showFolderManager, setShowFolderManager] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [importExportMode, setImportExportMode] = useState('export');
   const [selectedScript, setSelectedScript] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -27,173 +36,47 @@ const ScriptManagement = () => {
     genres: [],
     statuses: [],
     dateRange: { from: '', to: '' },
-    tags: []
+    tags: [],
+    folders: []
   });
 
-  // Mock data
-  const mockScripts = [
-    {
-      id: 1,
-      title: "The Last Stand",
-      description: "A gripping action thriller about survival",
-      genre: "Action",
-      status: "completed",
-      lastModified: new Date(2025, 6, 20),
-      pageCount: 120,
-      version: "2.1",
-      author: "John Writer",
-      tags: ["action", "thriller", "completed"]
-    },
-    {
-      id: 2,
-      title: "Coffee Shop Chronicles",
-      description: "A romantic comedy set in downtown Seattle",
-      genre: "Comedy",
-      status: "in-progress",
-      lastModified: new Date(2025, 6, 24),
-      pageCount: 87,
-      version: "1.5",
-      author: "John Writer",
-      tags: ["comedy", "romance", "seattle"]
-    },
-    {
-      id: 3,
-      title: "Midnight Detective",
-      description: "A noir mystery in 1940s Los Angeles",
-      genre: "Mystery",
-      status: "draft",
-      lastModified: new Date(2025, 6, 15),
-      pageCount: 45,
-      version: "0.8",
-      author: "John Writer",
-      tags: ["mystery", "noir", "1940s"]
-    },
-    {
-      id: 4,
-      title: "Space Odyssey 2087",
-      description: "Humanity\'s first journey to distant galaxies",
-      genre: "Sci-Fi",
-      status: "in-progress",
-      lastModified: new Date(2025, 6, 22),
-      pageCount: 98,
-      version: "1.2",
-      author: "John Writer",
-      tags: ["sci-fi", "space", "future"]
-    },
-    {
-      id: 5,
-      title: "The Haunted Manor",
-      description: "A supernatural horror story",
-      genre: "Horror",
-      status: "archived",
-      lastModified: new Date(2025, 5, 10),
-      pageCount: 110,
-      version: "3.0",
-      author: "John Writer",
-      tags: ["horror", "supernatural", "manor"]
-    }
-  ];
-
-  const mockVersions = [
-    {
-      id: 1,
-      number: "2.1",
-      type: "major",
-      description: "Final draft with director\'s notes incorporated",
-      author: "John Writer",
-      createdAt: new Date(2025, 6, 20),
-      changes: 47,
-      size: "1.2 MB"
-    },
-    {
-      id: 2,
-      number: "2.0",
-      type: "major",
-      description: "Second draft after feedback review",
-      author: "John Writer",
-      createdAt: new Date(2025, 6, 15),
-      changes: 89,
-      size: "1.1 MB"
-    },
-    {
-      id: 3,
-      number: "1.5",
-      type: "minor",
-      description: "Character development improvements",
-      author: "John Writer",
-      createdAt: new Date(2025, 6, 10),
-      changes: 23,
-      size: "1.0 MB"
-    },
-    {
-      id: 4,
-      number: "1.0",
-      type: "major",
-      description: "First complete draft",
-      author: "John Writer",
-      createdAt: new Date(2025, 6, 1),
-      changes: 156,
-      size: "950 KB"
-    }
-  ];
-
-  const mockSearchResults = [
-    {
-      id: 1,
-      title: "The Last Stand",
-      type: "Feature Film",
-      genre: "Action",
-      snippet: "FADE IN: EXT. ABANDONED WAREHOUSE - NIGHT. The rain pounds against the broken windows...",
-      matchType: "content",
-      pageNumber: 15
-    },
-    {
-      id: 2,
-      title: "Coffee Shop Chronicles",
-      type: "Feature Film", 
-      genre: "Comedy",
-      snippet: "SARAH enters the coffee shop, looking around nervously for her blind date...",
-      matchType: "content",
-      pageNumber: 8
-    }
-  ];
-
-  const savedPresets = [
-    { id: 1, name: "Completed Scripts", filters: { statuses: ["completed"], genres: [], dateRange: { from: '', to: '' }, tags: [] } },
-    { id: 2, name: "Recent Drafts", filters: { statuses: ["draft", "in-progress"], genres: [], dateRange: { from: '', to: '' }, tags: [] } },
-    { id: 3, name: "Action & Thriller", filters: { genres: ["Action", "Thriller"], statuses: [], dateRange: { from: '', to: '' }, tags: [] } }
-  ];
-
+  // Apply filters and search
   useEffect(() => {
-    setScripts(mockScripts);
-    setFilteredScripts(mockScripts);
-  }, []);
+    let filtered = scripts;
 
-  useEffect(() => {
-    let filtered = [...scripts];
-
-    // Apply filters
+    // Apply advanced filters
     if (filters.genres.length > 0) {
-      filtered = filtered.filter(script => filters.genres.includes(script.genre));
+      filtered = filtered.filter(script => filters.genres.includes(script.genre || script.type));
     }
 
     if (filters.statuses.length > 0) {
-      filtered = filtered.filter(script => filters.statuses.includes(script.status));
+      filtered = filtered.filter(script => filters.statuses.includes(script.status || 'draft'));
+    }
+
+    if (filters.folders.length > 0) {
+      const folderScriptIds = new Set();
+      filters.folders.forEach(folderId => {
+        const folder = folders.find(f => f.id === folderId);
+        if (folder?.scriptIds) {
+          folder.scriptIds.forEach(id => folderScriptIds.add(id));
+        }
+      });
+      filtered = filtered.filter(script => folderScriptIds.has(script.id));
     }
 
     if (filters.dateRange.from) {
       const fromDate = new Date(filters.dateRange.from);
-      filtered = filtered.filter(script => script.lastModified >= fromDate);
+      filtered = filtered.filter(script => new Date(script.lastModified) >= fromDate);
     }
 
     if (filters.dateRange.to) {
       const toDate = new Date(filters.dateRange.to);
-      filtered = filtered.filter(script => script.lastModified <= toDate);
+      filtered = filtered.filter(script => new Date(script.lastModified) <= toDate);
     }
 
     if (filters.tags.length > 0) {
       filtered = filtered.filter(script => 
-        filters.tags.some(tag => script.tags.includes(tag.toLowerCase()))
+        script.tags && filters.tags.some(tag => script.tags.includes(tag))
       );
     }
 
@@ -210,18 +93,29 @@ const ScriptManagement = () => {
     });
 
     setFilteredScripts(filtered);
-  }, [scripts, filters, sortConfig]);
+  }, [scripts, filters, sortConfig, folders]);
 
   const handleSearch = (query) => {
     setIsSearching(true);
     
-    // Simulate search delay
     setTimeout(() => {
       if (query.trim()) {
-        setSearchResults(mockSearchResults.filter(result => 
-          result.title.toLowerCase().includes(query.toLowerCase()) ||
-          result.snippet.toLowerCase().includes(query.toLowerCase())
-        ));
+        const results = searchScripts(query, {
+          searchInContent: true,
+          searchInTags: true,
+          caseSensitive: false
+        });
+        
+        // Transform results for search display
+        setSearchResults(results.map(script => ({
+          id: script.id,
+          title: script.title,
+          type: script.type || 'Feature Film',
+          genre: script.genre || script.type || 'Unknown',
+          snippet: script.description || script.content?.substring(0, 100) || 'No content available',
+          matchType: 'content',
+          pageNumber: 1
+        })));
       } else {
         setSearchResults([]);
       }
@@ -259,23 +153,22 @@ const ScriptManagement = () => {
   const handleDuplicateScript = (script) => {
     const newScript = {
       ...script,
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       title: `${script.title} (Copy)`,
       version: "1.0",
-      lastModified: new Date()
+      lastModified: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
-    setScripts(prev => [newScript, ...prev]);
+    addScript(newScript);
   };
 
   const handleArchiveScript = (script) => {
-    setScripts(prev => 
-      prev.map(s => s.id === script.id ? { ...s, status: 'archived' } : s)
-    );
+    updateScript(script.id, { status: 'archived' });
   };
 
   const handleDeleteScript = (script) => {
     if (confirm(`Are you sure you want to delete "${script.title}"? This action cannot be undone.`)) {
-      setScripts(prev => prev.filter(s => s.id !== script.id));
+      deleteScript(script.id);
       setSelectedScripts(prev => prev.filter(id => id !== script.id));
     }
   };
@@ -286,39 +179,52 @@ const ScriptManagement = () => {
   };
 
   const handleBulkExport = () => {
-    setShowExportWizard(true);
+    setImportExportMode('export');
+    setShowImportExport(true);
+  };
+
+  const handleBulkImport = () => {
+    setImportExportMode('import');
+    setShowImportExport(true);
   };
 
   const handleBulkArchive = () => {
     if (confirm(`Archive ${selectedScripts.length} selected scripts?`)) {
-      setScripts(prev => 
-        prev.map(script => 
-          selectedScripts.includes(script.id) 
-            ? { ...script, status: 'archived' }
-            : script
-        )
-      );
+      selectedScripts.forEach(scriptId => {
+        updateScript(scriptId, { status: 'archived' });
+      });
       setSelectedScripts([]);
     }
   };
 
   const handleBulkDelete = () => {
     if (confirm(`Delete ${selectedScripts.length} selected scripts? This action cannot be undone.`)) {
-      setScripts(prev => prev.filter(script => !selectedScripts.includes(script.id)));
+      selectedScripts.forEach(scriptId => {
+        deleteScript(scriptId);
+      });
       setSelectedScripts([]);
     }
   };
 
   const handleCreateFolder = () => {
-    console.log('Create folder for selected scripts');
+    setShowFolderManager(true);
   };
 
   const handleMoveToFolder = () => {
-    console.log('Move selected scripts to folder');
+    setShowFolderManager(true);
   };
 
   const handleSavePreset = (name, filterSettings) => {
-    console.log('Saving preset:', name, filterSettings);
+    // Save filter preset to storage
+    const presets = storageService.getItem('scriptcraft_filter_presets') || [];
+    const newPreset = {
+      id: Date.now(),
+      name,
+      filters: filterSettings,
+      createdAt: new Date().toISOString()
+    };
+    presets.push(newPreset);
+    storageService.setItem('scriptcraft_filter_presets', presets);
   };
 
   const handleLoadPreset = (preset) => {
@@ -326,8 +232,44 @@ const ScriptManagement = () => {
   };
 
   const handleNewScript = () => {
-    navigate('/script-editor');
+    const newScript = {
+      title: "Untitled Script",
+      description: "A new screenplay ready for your creative vision.",
+      type: "feature",
+      pageCount: 0,
+      wordCount: 0,
+      content: "",
+      tags: [],
+      status: "draft"
+    };
+    
+    const createdScript = addScript(newScript);
+    navigate('/script-editor', { state: { script: createdScript } });
   };
+
+  // Get saved presets
+  const savedPresets = storageService.getItem('scriptcraft_filter_presets') || [
+    { id: 1, name: "Completed Scripts", filters: { statuses: ["completed"], genres: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } },
+    { id: 2, name: "Recent Drafts", filters: { statuses: ["draft", "in-progress"], genres: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } },
+    { id: 3, name: "Action & Thriller", filters: { genres: ["Action", "Thriller"], statuses: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } }
+  ];
+
+  // Get version history for selected script
+  const getVersionHistory = (script) => {
+    const allHistory = storageService.getVersionHistory();
+    return allHistory[script?.id] || [];
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="Loader2" size={32} className="animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading script management...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -345,6 +287,8 @@ const ScriptManagement = () => {
             onSavePreset={handleSavePreset}
             savedPresets={savedPresets}
             onLoadPreset={handleLoadPreset}
+            folders={folders}
+            scripts={scripts}
           />
 
           {/* Main Content */}
@@ -362,7 +306,16 @@ const ScriptManagement = () => {
                 <div className="flex items-center space-x-3">
                   <Button
                     variant="outline"
-                    onClick={() => setShowExportWizard(true)}
+                    onClick={handleBulkImport}
+                    iconName="Upload"
+                    iconPosition="left"
+                    className="hidden sm:flex"
+                  >
+                    Import
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleBulkExport}
                     iconName="Download"
                     iconPosition="left"
                     className="hidden sm:flex"
@@ -465,13 +418,30 @@ const ScriptManagement = () => {
         isOpen={showVersionHistory}
         onClose={() => setShowVersionHistory(false)}
         script={selectedScript}
-        versions={mockVersions}
+        versions={getVersionHistory(selectedScript)}
       />
 
       <ExportWizard
         isOpen={showExportWizard}
         onClose={() => setShowExportWizard(false)}
         selectedScripts={selectedScripts.length > 0 ? selectedScripts : scripts.map(s => s.id)}
+      />
+
+      <FolderManager
+        isOpen={showFolderManager}
+        onClose={() => setShowFolderManager(false)}
+        selectedScripts={selectedScripts}
+        onScriptsMoved={(count, folderId) => {
+          setSelectedScripts([]);
+          // Show success message or notification
+        }}
+      />
+
+      <ImportExportModal
+        isOpen={showImportExport}
+        onClose={() => setShowImportExport(false)}
+        mode={importExportMode}
+        selectedScripts={selectedScripts}
       />
     </div>
   );

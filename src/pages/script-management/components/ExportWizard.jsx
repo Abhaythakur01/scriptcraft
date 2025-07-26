@@ -3,8 +3,9 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import { Checkbox } from '../../../components/ui/Checkbox';
+import { useScriptsStorage } from '../../../hooks/useLocalStorage';
 
-const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
+const ExportWizard = ({ isOpen, onClose, selectedScripts: selectedScriptIds }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [exportSettings, setExportSettings] = useState({
     format: 'pdf',
@@ -18,6 +19,11 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
     colorPages: false,
     separateFiles: true
   });
+
+  const { scripts } = useScriptsStorage();
+
+  const selectedScripts = scripts.filter(script => selectedScriptIds.includes(script.id));
+
 
   if (!isOpen) return null;
 
@@ -53,12 +59,32 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
     }
   };
 
+  const downloadFile = (filename, content, mimeType) => {
+    const element = document.createElement('a');
+    const file = new Blob([content], { type: mimeType });
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element); // Required for this to work in FireFox
+    element.click();
+    document.body.removeChild(element);
+  };
+
   const handleExport = () => {
     console.log('Exporting with settings:', exportSettings);
     console.log('Selected scripts:', selectedScripts);
-    // Simulate export process
+
+    if (exportSettings.format === 'fountain' || exportSettings.format === 'txt') {
+      selectedScripts.forEach(script => {
+        const scriptContent = script.content || 'No content available.';
+        downloadFile(`${script.title}.txt`, scriptContent, 'text/plain');
+      });
+    } else {
+      alert(`Exporting as ${exportSettings.format.toUpperCase()} is not yet implemented.`);
+    }
+
     onClose();
   };
+
 
   const updateSetting = (key, value) => {
     setExportSettings(prev => ({ ...prev, [key]: value }));
@@ -87,8 +113,8 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
               <div key={step.number} className="flex items-center">
                 <div className={`
                   w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                  ${currentStep >= step.number 
-                    ? 'bg-primary text-primary-foreground' 
+                  ${currentStep >= step.number
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground'
                   }
                 `}>
@@ -130,7 +156,7 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
                       className={`
                         p-4 border rounded-lg text-left transition-hover
                         ${exportSettings.format === format.value
-                          ? 'border-primary bg-primary/5' :'border-border hover:border-primary/50'
+                          ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                         }
                       `}
                     >
@@ -138,9 +164,9 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                           exportSettings.format === format.value ? 'bg-primary/10' : 'bg-muted'
                         }`}>
-                          <Icon 
-                            name={format.icon} 
-                            size={20} 
+                          <Icon
+                            name={format.icon}
+                            size={20}
                             className={exportSettings.format === format.value ? 'text-primary' : 'text-muted-foreground'}
                           />
                         </div>
@@ -287,7 +313,7 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
                   <div>
                     <h4 className="font-medium text-foreground">Export Information</h4>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Your scripts will be exported with industry-standard formatting. 
+                      Your scripts will be exported with industry-standard formatting.
                       The export process may take a few moments for multiple scripts.
                     </p>
                   </div>
@@ -307,7 +333,7 @@ const ExportWizard = ({ isOpen, onClose, selectedScripts }) => {
           >
             {currentStep === 1 ? 'Cancel' : 'Previous'}
           </Button>
-          
+
           <div className="flex items-center space-x-2">
             {currentStep < 3 ? (
               <Button

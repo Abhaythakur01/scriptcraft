@@ -45,6 +45,20 @@ const FormattingPalette = ({ onFormatChange, activeFormat }) => {
       icon: 'ArrowRight', 
       shortcut: 'Ctrl+6',
       description: 'FADE IN:, CUT TO:'
+    },
+    { 
+      id: 'shot', 
+      label: 'Shot', 
+      icon: 'Camera', 
+      shortcut: 'Ctrl+7',
+      description: 'A specific camera shot'
+    },
+    { 
+      id: 'subheader', 
+      label: 'Subheader', 
+      icon: 'Subtitles', 
+      shortcut: 'Ctrl+8',
+      description: 'A minor location change'
     }
   ];
 

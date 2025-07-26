@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
-
 import Select from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
+import ImportExportModal from '../../../components/ui/ImportExportModal';
+import { useLocalStorage, useImportExport } from '../../../hooks/useLocalStorage';
+import storageService from '../../../utils/storage';
 
 const BackupConfiguration = () => {
-  const [backupSettings, setBackupSettings] = useState({
+  const [backupSettings, setBackupSettings] = useLocalStorage('scriptcraft_backup_settings', {
     autoSaveEnabled: true,
     autoSaveInterval: '30',
     localBackupEnabled: true,
@@ -22,13 +24,42 @@ const BackupConfiguration = () => {
   });
 
   const [backupStatus, setBackupStatus] = useState({
-    lastAutoSave: new Date(Date.now() - 300000).toLocaleString(),
-    lastLocalBackup: new Date(Date.now() - 86400000).toLocaleString(),
+    lastAutoSave: 'Never',
+    lastLocalBackup: 'Never',
     lastCloudSync: 'Never',
-    totalBackups: 127,
-    storageUsed: '2.3 GB',
-    nextScheduledBackup: new Date(Date.now() + 3600000).toLocaleString()
+    totalBackups: 0,
+    storageUsed: '0 KB',
+    nextScheduledBackup: 'Never'
   });
+
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [importExportMode, setImportExportMode] = useState('export');
+  const { exportData, importData } = useImportExport();
+
+  useEffect(() => {
+    // Load actual backup status from storage
+    const updateBackupStatus = () => {
+      const usage = storageService.getStorageUsage();
+      const recentActivity = storageService.getRecentActivity();
+      const lastAutoSave = recentActivity.find(a => a.type === 'script_updated');
+      const lastBackup = localStorage.getItem('scriptcraft_last_backup');
+      
+      setBackupStatus({
+        lastAutoSave: lastAutoSave ? new Date(lastAutoSave.timestamp).toLocaleString() : 'Never',
+        lastLocalBackup: lastBackup ? new Date(lastBackup).toLocaleString() : 'Never',
+        lastCloudSync: 'Never', // Cloud sync not implemented yet
+        totalBackups: usage.itemCounts.scripts,
+        storageUsed: `${usage.totalSizeMB} MB`,
+        nextScheduledBackup: backupSettings.localBackupEnabled ? 
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleString() : 'Never'
+      });
+    };
+
+    updateBackupStatus();
+    const interval = setInterval(updateBackupStatus, 30000); // Update every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [backupSettings]);
 
   const intervalOptions = [
     { value: '15', label: 'Every 15 seconds' },
@@ -77,51 +108,83 @@ const BackupConfiguration = () => {
   };
 
   const handleSave = () => {
-    console.log('Saving backup settings:', backupSettings);
+    // Settings are automatically saved via useLocalStorage hook
+    alert('Backup settings saved successfully!');
   };
 
-  const handleManualBackup = () => {
-    console.log('Creating manual backup...');
-    setBackupStatus(prev => ({
-      ...prev,
-      lastLocalBackup: new Date().toLocaleString(),
-      totalBackups: prev.totalBackups + 1
-    }));
+  const handleManualBackup = async () => {
+    const result = await exportData({
+      includeScripts: true,
+      includeProjects: true,
+      includeSettings: true,
+      includeFolders: true,
+      includeTags: true,
+      includeVersionHistory: backupSettings.versionHistoryEnabled
+    });
+    
+    if (result.success) {
+      localStorage.setItem('scriptcraft_last_backup', new Date().toISOString());
+      setBackupStatus(prev => ({
+        ...prev,
+        lastLocalBackup: new Date().toLocaleString(),
+        totalBackups: prev.totalBackups + 1
+      }));
+    }
   };
 
   const handleCloudSync = () => {
-    console.log('Syncing to cloud...');
-    setBackupStatus(prev => ({
-      ...prev,
-      lastCloudSync: new Date().toLocaleString()
-    }));
+    alert('Cloud sync feature will be available in a future update. For now, use the manual backup feature.');
   };
 
   const handleRestoreBackup = () => {
-    console.log('Opening restore dialog...');
+    setImportExportMode('import');
+    setShowImportExport(true);
   };
 
   const handleCleanupOldBackups = () => {
-    if (confirm('This will permanently delete old backup files. Continue?')) {
-      console.log('Cleaning up old backups...');
+    if (confirm('This will clean up old version history to free up storage space. Continue?')) {
+      // Clean up version history
+      const versionHistory = storageService.getVersionHistory();
+      const cleanedHistory = {};
+      
+      Object.keys(versionHistory).forEach(scriptId => {
+        const versions = versionHistory[scriptId];
+        if (versions && versions.length > 10) {
+          cleanedHistory[scriptId] = versions.slice(-10);
+        } else {
+          cleanedHistory[scriptId] = versions;
+        }
+      });
+      
+      storageService.setItem('scriptcraft_version_history', cleanedHistory);
+      
+      // Clean up old activity
+      const recentActivity = storageService.getRecentActivity();
+      if (recentActivity.length > 50) {
+        storageService.setItem('scriptcraft_recent_activity', recentActivity.slice(-50));
+      }
+      
+      alert('Old backups cleaned up successfully!');
     }
   };
 
   const handleReset = () => {
-    setBackupSettings({
-      autoSaveEnabled: true,
-      autoSaveInterval: '30',
-      localBackupEnabled: true,
-      localBackupFrequency: 'daily',
-      localBackupRetention: '30',
-      cloudSyncEnabled: false,
-      cloudProvider: 'google-drive',
-      cloudSyncFrequency: 'hourly',
-      versionHistoryEnabled: true,
-      maxVersions: '50',
-      compressionEnabled: true,
-      encryptionEnabled: false
-    });
+    if (confirm('Reset all backup settings to defaults? This will not affect your existing scripts.')) {
+      setBackupSettings({
+        autoSaveEnabled: true,
+        autoSaveInterval: '30',
+        localBackupEnabled: true,
+        localBackupFrequency: 'daily',
+        localBackupRetention: '30',
+        cloudSyncEnabled: false,
+        cloudProvider: 'google-drive',
+        cloudSyncFrequency: 'hourly',
+        versionHistoryEnabled: true,
+        maxVersions: '50',
+        compressionEnabled: true,
+        encryptionEnabled: false
+      });
+    }
   };
 
   return (
@@ -151,7 +214,7 @@ const BackupConfiguration = () => {
               <p className="text-foreground font-medium">{backupStatus.lastCloudSync}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Total Backups</label>
+              <label className="text-sm font-medium text-muted-foreground">Total Scripts</label>
               <p className="text-foreground font-medium">{backupStatus.totalBackups}</p>
             </div>
           </div>
@@ -300,17 +363,8 @@ const BackupConfiguration = () => {
             <div className="ml-6 mt-4 p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground flex items-start">
                 <Icon name="Info" size={16} className="mr-2 mt-0.5 text-primary" />
-                You'll need to authenticate with your chosen cloud provider to enable sync functionality.
+                Cloud sync feature will be available in a future update. For now, use manual backup and restore functionality.
               </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-3"
-                iconName="Link"
-                iconPosition="left"
-              >
-                Connect to {cloudProviderOptions.find(p => p.value === backupSettings.cloudProvider)?.label}
-              </Button>
             </div>
           )}
         </div>
@@ -398,6 +452,13 @@ const BackupConfiguration = () => {
           </Button>
         </div>
       </div>
+
+      {/* Import/Export Modal */}
+      <ImportExportModal
+        isOpen={showImportExport}
+        onClose={() => setShowImportExport(false)}
+        mode={importExportMode}
+      />
     </div>
   );
 };
