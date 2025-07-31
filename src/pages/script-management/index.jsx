@@ -25,10 +25,11 @@ const ScriptManagement = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showExportWizard, setShowExportWizard] = useState(false);
+  const [scriptsToExport, setScriptsToExport] = useState([]);
   const [showFolderManager, setShowFolderManager] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [importExportMode, setImportExportMode] = useState('export');
-  const [selectedScript, setSelectedScript] = useState(null);
+  const [selectedScriptForHistory, setSelectedScriptForHistory] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'lastModified', direction: 'desc' });
@@ -40,19 +41,14 @@ const ScriptManagement = () => {
     folders: []
   });
 
-  // Apply filters and search
   useEffect(() => {
     let filtered = scripts;
-
-    // Apply advanced filters
     if (filters.genres.length > 0) {
       filtered = filtered.filter(script => filters.genres.includes(script.genre || script.type));
     }
-
     if (filters.statuses.length > 0) {
       filtered = filtered.filter(script => filters.statuses.includes(script.status || 'draft'));
     }
-
     if (filters.folders.length > 0) {
       const folderScriptIds = new Set();
       filters.folders.forEach(folderId => {
@@ -63,56 +59,42 @@ const ScriptManagement = () => {
       });
       filtered = filtered.filter(script => folderScriptIds.has(script.id));
     }
-
     if (filters.dateRange.from) {
-      const fromDate = new Date(filters.dateRange.from);
-      filtered = filtered.filter(script => new Date(script.lastModified) >= fromDate);
+      filtered = filtered.filter(script => new Date(script.lastModified) >= new Date(filters.dateRange.from));
     }
-
     if (filters.dateRange.to) {
-      const toDate = new Date(filters.dateRange.to);
-      filtered = filtered.filter(script => new Date(script.lastModified) <= toDate);
+      filtered = filtered.filter(script => new Date(script.lastModified) <= new Date(filters.dateRange.to));
     }
-
     if (filters.tags.length > 0) {
-      filtered = filtered.filter(script => 
-        script.tags && filters.tags.some(tag => script.tags.includes(tag))
-      );
+      filtered = filtered.filter(script => script.tags && filters.tags.some(tag => script.tags.includes(tag)));
     }
-
-    // Apply sorting
     filtered.sort((a, b) => {
       const aValue = a[sortConfig.key];
       const bValue = b[sortConfig.key];
-
       if (sortConfig.direction === 'asc') {
         return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
       }
+      return aValue < bValue ? 1 : -1;
     });
-
     setFilteredScripts(filtered);
   }, [scripts, filters, sortConfig, folders]);
 
+  const handleExportScript = (script) => {
+    setScriptsToExport([script.id]);
+    setShowExportWizard(true);
+  };
+
   const handleSearch = (query) => {
     setIsSearching(true);
-    
     setTimeout(() => {
       if (query.trim()) {
-        const results = searchScripts(query, {
-          searchInContent: true,
-          searchInTags: true,
-          caseSensitive: false
-        });
-        
-        // Transform results for search display
+        const results = searchScripts(query, { searchInContent: true, searchInTags: true, caseSensitive: false });
         setSearchResults(results.map(script => ({
           id: script.id,
           title: script.title,
           type: script.type || 'Feature Film',
           genre: script.genre || script.type || 'Unknown',
-          snippet: script.description || script.content?.substring(0, 100) || 'No content available',
+          snippet: script.description || (typeof script.content === 'string' && script.content.substring(0, 100)) || 'No content available',
           matchType: 'content',
           pageNumber: 1
         })));
@@ -131,8 +113,8 @@ const ScriptManagement = () => {
   };
 
   const handleSelectScript = (scriptId) => {
-    setSelectedScripts(prev => 
-      prev.includes(scriptId) 
+    setSelectedScripts(prev =>
+      prev.includes(scriptId)
         ? prev.filter(id => id !== scriptId)
         : [...prev, scriptId]
     );
@@ -140,8 +122,8 @@ const ScriptManagement = () => {
 
   const handleSelectAll = () => {
     setSelectedScripts(
-      selectedScripts.length === filteredScripts.length 
-        ? [] 
+      selectedScripts.length === filteredScripts.length
+        ? []
         : filteredScripts.map(script => script.id)
     );
   };
@@ -167,29 +149,29 @@ const ScriptManagement = () => {
   };
 
   const handleDeleteScript = (script) => {
-    if (confirm(`Are you sure you want to delete "${script.title}"? This action cannot be undone.`)) {
+    if (window.confirm(`Are you sure you want to delete "${script.title}"? This action cannot be undone.`)) {
       deleteScript(script.id);
       setSelectedScripts(prev => prev.filter(id => id !== script.id));
     }
   };
-
+  
   const handleViewHistory = (script) => {
-    setSelectedScript(script);
+    setSelectedScriptForHistory(script);
     setShowVersionHistory(true);
   };
 
   const handleBulkExport = () => {
+    setScriptsToExport(selectedScripts);
+    setShowExportWizard(true);
+  };
+
+  const handleBulkDataBackup = () => {
     setImportExportMode('export');
     setShowImportExport(true);
   };
 
-  const handleBulkImport = () => {
-    setImportExportMode('import');
-    setShowImportExport(true);
-  };
-
   const handleBulkArchive = () => {
-    if (confirm(`Archive ${selectedScripts.length} selected scripts?`)) {
+    if (window.confirm(`Archive ${selectedScripts.length} selected scripts?`)) {
       selectedScripts.forEach(scriptId => {
         updateScript(scriptId, { status: 'archived' });
       });
@@ -198,7 +180,7 @@ const ScriptManagement = () => {
   };
 
   const handleBulkDelete = () => {
-    if (confirm(`Delete ${selectedScripts.length} selected scripts? This action cannot be undone.`)) {
+    if (window.confirm(`Delete ${selectedScripts.length} selected scripts? This action cannot be undone.`)) {
       selectedScripts.forEach(scriptId => {
         deleteScript(scriptId);
       });
@@ -215,7 +197,6 @@ const ScriptManagement = () => {
   };
 
   const handleSavePreset = (name, filterSettings) => {
-    // Save filter preset to storage
     const presets = storageService.getItem('scriptcraft_filter_presets') || [];
     const newPreset = {
       id: Date.now(),
@@ -223,8 +204,7 @@ const ScriptManagement = () => {
       filters: filterSettings,
       createdAt: new Date().toISOString()
     };
-    presets.push(newPreset);
-    storageService.setItem('scriptcraft_filter_presets', presets);
+    storageService.setItem('scriptcraft_filter_presets', [...presets, newPreset]);
   };
 
   const handleLoadPreset = (preset) => {
@@ -242,19 +222,11 @@ const ScriptManagement = () => {
       tags: [],
       status: "draft"
     };
-    
     const createdScript = addScript(newScript);
     navigate('/script-editor', { state: { script: createdScript } });
   };
 
-  // Get saved presets
-  const savedPresets = storageService.getItem('scriptcraft_filter_presets') || [
-    { id: 1, name: "Completed Scripts", filters: { statuses: ["completed"], genres: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } },
-    { id: 2, name: "Recent Drafts", filters: { statuses: ["draft", "in-progress"], genres: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } },
-    { id: 3, name: "Action & Thriller", filters: { genres: ["Action", "Thriller"], statuses: [], dateRange: { from: '', to: '' }, tags: [], folders: [] } }
-  ];
-
-  // Get version history for selected script
+  const savedPresets = storageService.getItem('scriptcraft_filter_presets') || [];
   const getVersionHistory = (script) => {
     const allHistory = storageService.getVersionHistory();
     return allHistory[script?.id] || [];
@@ -275,10 +247,8 @@ const ScriptManagement = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <ScriptContextToolbar />
-      
       <div className="pt-32 lg:pt-28">
         <div className="flex h-[calc(100vh-8rem)]">
-          {/* Filter Sidebar */}
           <FilterSidebar
             isOpen={showFilters}
             onClose={() => setShowFilters(false)}
@@ -290,10 +260,7 @@ const ScriptManagement = () => {
             folders={folders}
             scripts={scripts}
           />
-
-          {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Header Section */}
             <div className="p-6 border-b border-border bg-background">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                 <div>
@@ -302,25 +269,15 @@ const ScriptManagement = () => {
                     Organize and manage your screenplay library
                   </p>
                 </div>
-
                 <div className="flex items-center space-x-3">
-                  <Button
+                   <Button
                     variant="outline"
-                    onClick={handleBulkImport}
-                    iconName="Upload"
+                    onClick={handleBulkDataBackup}
+                    iconName="Database"
                     iconPosition="left"
                     className="hidden sm:flex"
                   >
-                    Import
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleBulkExport}
-                    iconName="Download"
-                    iconPosition="left"
-                    className="hidden sm:flex"
-                  >
-                    Export
+                    Import/Export Data
                   </Button>
                   <Button
                     variant="default"
@@ -332,8 +289,6 @@ const ScriptManagement = () => {
                   </Button>
                 </div>
               </div>
-
-              {/* Search and Controls */}
               <div className="mt-6">
                 <SearchBar
                   onSearch={handleSearch}
@@ -342,47 +297,7 @@ const ScriptManagement = () => {
                   isSearching={isSearching}
                 />
               </div>
-
-              {/* Stats */}
-              <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <Icon name="FileText" size={20} className="text-primary" />
-                    <span className="text-sm font-medium text-muted-foreground">Total Scripts</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground mt-1">{scripts.length}</p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <Icon name="Clock" size={20} className="text-warning" />
-                    <span className="text-sm font-medium text-muted-foreground">In Progress</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground mt-1">
-                    {scripts.filter(s => s.status === 'in-progress').length}
-                  </p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <Icon name="CheckCircle" size={20} className="text-success" />
-                    <span className="text-sm font-medium text-muted-foreground">Completed</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground mt-1">
-                    {scripts.filter(s => s.status === 'completed').length}
-                  </p>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex items-center space-x-2">
-                    <Icon name="Archive" size={20} className="text-secondary" />
-                    <span className="text-sm font-medium text-muted-foreground">Archived</span>
-                  </div>
-                  <p className="text-2xl font-bold text-foreground mt-1">
-                    {scripts.filter(s => s.status === 'archived').length}
-                  </p>
-                </div>
-              </div>
             </div>
-
-            {/* Scripts Table */}
             <div className="flex-1 overflow-auto p-6">
               <ScriptTable
                 scripts={filteredScripts}
@@ -394,6 +309,7 @@ const ScriptManagement = () => {
                 onArchiveScript={handleArchiveScript}
                 onDeleteScript={handleDeleteScript}
                 onViewHistory={handleViewHistory}
+                onExportScript={handleExportScript}
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
@@ -401,8 +317,6 @@ const ScriptManagement = () => {
           </div>
         </div>
       </div>
-
-      {/* Bulk Actions Bar */}
       <BulkActionsBar
         selectedCount={selectedScripts.length}
         onExport={handleBulkExport}
@@ -412,31 +326,25 @@ const ScriptManagement = () => {
         onMoveToFolder={handleMoveToFolder}
         onClearSelection={() => setSelectedScripts([])}
       />
-
-      {/* Modals */}
       <VersionHistoryModal
         isOpen={showVersionHistory}
         onClose={() => setShowVersionHistory(false)}
-        script={selectedScript}
-        versions={getVersionHistory(selectedScript)}
+        script={selectedScriptForHistory}
+        versions={getVersionHistory(selectedScriptForHistory)}
       />
-
       <ExportWizard
         isOpen={showExportWizard}
         onClose={() => setShowExportWizard(false)}
-        selectedScripts={selectedScripts.length > 0 ? selectedScripts : scripts.map(s => s.id)}
+        selectedScripts={scriptsToExport}
       />
-
       <FolderManager
         isOpen={showFolderManager}
         onClose={() => setShowFolderManager(false)}
         selectedScripts={selectedScripts}
-        onScriptsMoved={(count, folderId) => {
+        onScriptsMoved={() => {
           setSelectedScripts([]);
-          // Show success message or notification
         }}
       />
-
       <ImportExportModal
         isOpen={showImportExport}
         onClose={() => setShowImportExport(false)}

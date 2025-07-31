@@ -56,7 +56,23 @@ const EditorLoader = () => (
 // Main component
 const ScriptEditorPage = () => {
   // Editor instance (stable reference)
-  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  const editor = useMemo(() => {
+  const baseEditor = createEditor();
+  const reactEditor = withReact(baseEditor);
+  const historicEditor = withHistory(reactEditor);
+  
+  // Add focus method if it doesn't exist
+  if (!historicEditor.focus) {
+    historicEditor.focus = () => {
+      const editorEl = document.querySelector('[data-slate-editor="true"]');
+      if (editorEl) {
+        editorEl.focus();
+      }
+    };
+  }
+  
+  return historicEditor;
+}, []);
   
   // State management
   const [slateValue, setSlateValue] = useState(DEFAULT_INITIAL_VALUE);
@@ -102,26 +118,26 @@ const ScriptEditorPage = () => {
   
   // Event handlers
   const handleFormatChange = useCallback((newFormat) => {
-    setActiveFormat(newFormat);
+  console.log('handleFormatChange called with:', newFormat);
+  setActiveFormat(newFormat);
+  
+  try {
+    // Get current selection or start of document
+    const currentSelection = editor.selection || {
+      anchor: { path: [0], offset: 0 },
+      focus: { path: [0], offset: 0 }
+    };
     
-    // Apply format to current selection/block
-    try {
-      Transforms.setNodes(
-        editor,
-        { type: newFormat },
-        { 
-          match: n => editor.isBlock(n)
-        }
-      );
-      
-      // Focus editor after format change
-      setTimeout(() => {
-        editor.focus();
-      }, 0);
-    } catch (error) {
-      console.warn('Error applying format:', error);
-    }
-  }, [editor]);
+    // Apply format to current block
+    Transforms.setNodes(
+      editor,
+      { type: newFormat }
+    );
+    
+  } catch (error) {
+    console.error('Error applying format:', error);
+  }
+}, [editor]);
   
   const handleValueChange = useCallback((newValue) => {
     setSlateValue(newValue);
@@ -153,7 +169,10 @@ const ScriptEditorPage = () => {
               activeFormat={activeFormat}
             />
             
-            <ScriptEditor />
+            <ScriptEditor 
+                  activeFormat={activeFormat}
+                  nFormatChange={handleFormatChange}
+            />
             
             <ScriptNavigator content={slateValue} />
           </div>

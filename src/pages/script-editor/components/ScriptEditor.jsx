@@ -2,16 +2,17 @@ import React, { useCallback } from 'react';
 import { Editable, useSlate } from 'slate-react';
 import { Editor, Transforms, Element as SlateElement } from 'slate';
 
+// Element component for rendering different script formats
 const Element = ({ attributes, children, element }) => {
   const getFormatStyle = (type) => {
     const baseStyle = {
       fontFamily: "'Courier New', Courier, monospace",
       fontSize: '12pt',
-      lineHeight: '1.0', // Tighter line spacing for screenplay standard
+      lineHeight: '1.0',
       minHeight: '1.0em',
       margin: 0,
       padding: 0,
-      whiteSpace: 'pre-wrap', // Preserve spacing
+      whiteSpace: 'pre-wrap',
     };
 
     switch (type) {
@@ -30,7 +31,7 @@ const Element = ({ attributes, children, element }) => {
           ...baseStyle,
           textTransform: 'uppercase',
           fontWeight: 'bold',
-          marginLeft: '3.7in', // Industry standard: 3.7 inches from left
+          marginLeft: '3.7in',
           marginRight: '1.0in',
           marginTop: '1em',
           marginBottom: '0',
@@ -101,20 +102,153 @@ const Element = ({ attributes, children, element }) => {
   );
 };
 
-const ScriptEditor = () => {
-  const editor = useSlate();
-  const renderElement = useCallback(props => <Element {...props} />, []);
+// Leaf component for text formatting
+const Leaf = ({ attributes, children, leaf }) => {
+  if (leaf.bold) {
+    children = <strong>{children}</strong>;
+  }
+  if (leaf.italic) {
+    children = <em>{children}</em>;
+  }
+  if (leaf.underline) {
+    children = <u>{children}</u>;
+  }
+  return <span {...attributes}>{children}</span>;
+};
 
+// Main Script Editor Component
+const ScriptEditor = ({ activeFormat, onFormatChange }) => {
+  // Use the existing Slate editor from context
+  const editor = useSlate();
+
+  // Render functions
+  const renderElement = useCallback(props => <Element {...props} />, []);
+  const renderLeaf = useCallback(props => <Leaf {...props} />, []);
+
+  // Handle keyboard shortcuts and smart formatting
   const handleKeyDown = useCallback((event) => {
-    // Don't prevent default for most keys - let Slate handle them naturally
-    if (event.key === 'Enter') {
-      // Let Slate handle Enter naturally - just split the node
-      // The format logic can be handled elsewhere if needed
-      return;
+    const { key, ctrlKey, metaKey, shiftKey } = event;
+    const isModKey = ctrlKey || metaKey;
+
+    // Screenplay formatting shortcuts
+    if (isModKey && !shiftKey) {
+      switch (key) {
+        case '1':
+          event.preventDefault();
+          onFormatChange?.('scene-heading');
+          return;
+        case '2':
+          event.preventDefault();
+          onFormatChange?.('action');
+          return;
+        case '3':
+          event.preventDefault();
+          onFormatChange?.('character');
+          return;
+        case '4':
+          event.preventDefault();
+          onFormatChange?.('dialogue');
+          return;
+        case '5':
+          event.preventDefault();
+          onFormatChange?.('parenthetical');
+          return;
+        case '6':
+          event.preventDefault();
+          onFormatChange?.('transition');
+          return;
+        case '7':
+          event.preventDefault();
+          onFormatChange?.('shot');
+          return;
+        case '8':
+          event.preventDefault();
+          onFormatChange?.('subheader');
+          return;
+      }
     }
 
-    // Let all other keys work naturally (backspace, delete, arrows, etc.)
-  }, []);
+    // Smart Enter behavior
+    if (key === 'Enter') {
+      event.preventDefault();
+      
+      try {
+        const [match] = Editor.nodes(editor, {
+          match: n => Editor.isBlock(editor, n),
+        });
+        
+        if (match) {
+          const [node] = match;
+          const currentType = node.type;
+          let nextType = 'action';
+          
+          // Smart format transitions
+          switch (currentType) {
+            case 'scene-heading':
+              nextType = 'action';
+              break;
+            case 'action':
+              nextType = 'action';
+              break;
+            case 'character':
+              nextType = 'dialogue';
+              break;
+            case 'dialogue':
+              nextType = 'character';
+              break;
+            case 'parenthetical':
+              nextType = 'dialogue';
+              break;
+            case 'transition':
+              nextType = 'scene-heading';
+              break;
+            case 'shot':
+              nextType = 'action';
+              break;
+            case 'subheader':
+              nextType = 'action';
+              break;
+            default:
+              nextType = 'action';
+          }
+          
+          // Insert new block with smart format
+          Transforms.insertNodes(editor, {
+            type: nextType,
+            children: [{ text: '' }],
+          });
+          
+          // Update active format
+          onFormatChange?.(nextType);
+        }
+      } catch (error) {
+        console.warn('Error handling Enter key:', error);
+        // Fallback: just insert a new action block
+        Transforms.insertNodes(editor, {
+          type: 'action',
+          children: [{ text: '' }],
+        });
+      }
+    }
+    
+    // Tab cycling
+    if (key === 'Tab' && !isModKey) {
+      event.preventDefault();
+      const formats = ['scene-heading', 'action', 'character', 'dialogue', 'parenthetical', 'transition'];
+      const currentIndex = formats.indexOf(activeFormat || 'action');
+      const nextFormat = formats[(currentIndex + 1) % formats.length];
+      onFormatChange?.(nextFormat);
+    }
+
+    // Shift+Tab reverse cycling
+    if (key === 'Tab' && shiftKey) {
+      event.preventDefault();
+      const formats = ['scene-heading', 'action', 'character', 'dialogue', 'parenthetical', 'transition'];
+      const currentIndex = formats.indexOf(activeFormat || 'action');
+      const prevFormat = formats[currentIndex === 0 ? formats.length - 1 : currentIndex - 1];
+      onFormatChange?.(prevFormat);
+    }
+  }, [editor, activeFormat, onFormatChange]);
 
   return (
     <div className="flex-1 bg-muted relative overflow-y-auto flex justify-center">
@@ -124,15 +258,15 @@ const ScriptEditor = () => {
           style={{
             width: '8.5in',
             minHeight: '11in',
-            // Industry standard: 1" margins on top, bottom, and right
             paddingTop: '1.0in',
             paddingBottom: '1.0in',
-            paddingLeft: '0', // No left padding - elements handle their own margins
-            paddingRight: '0', // No right padding - elements handle their own margins
+            paddingLeft: '0',
+            paddingRight: '0',
           }}
         >
           <Editable
             renderElement={renderElement}
+            renderLeaf={renderLeaf}
             onKeyDown={handleKeyDown}
             placeholder="Start typing your script..."
             autoFocus
